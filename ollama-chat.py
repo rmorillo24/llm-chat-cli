@@ -7,6 +7,7 @@ import timeit
 import sys
 import argparse
 import questionary
+import os
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -76,9 +77,15 @@ def main():
         messages.append({"role": "assistant", "content": response["content"]})
         
         md = Markdown(response["content"])
-        console.print(md)
-        console.print(f"[{end - start} sec.]")
+        header = Markdown("| **" + user_input + "** |\n---\n\n\n")
         
+        '''
+        with console.pager(): # not using it because pager doesn't render properly the markdown
+        '''
+
+        console.print(header)
+        console.print(md)
+        console.print(f"\n[{str(end - start)}] sec.]")
 
 if __name__ == "__main__":
     main()
