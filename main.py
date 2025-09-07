@@ -57,6 +57,7 @@ class LLMClient:
 
         client_config = self.clients[provider]
         model_config = next((m for m in client_config.get('models', []) if m['name'] == model_name), None)
+        logging.debug("model config loaded: %s", model_config)
         if not model_config:
             raise ValueError(f"Modelo {model_name} no encontrado para el proveedor {provider}")
 
@@ -84,7 +85,7 @@ class LLMClient:
 
 if __name__ == "__main__":
     # Ruta al archivo de configuración
-    config_path = Path("configs.yaml")
+    config_path = Path.home() / Path(".config/llm-chat-cli/configs.yaml")
 
     console = Console()
 
