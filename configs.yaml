@@ -1,0 +1,41 @@
+default: openai-compatible:llama3.2
+
+clients:
+  - type: openai
+    api_base: https://api.openai.com/v1
+    api_key: sk-xxx
+    models:
+      - name: gpt-4o
+        max_input_tokens: 128000
+  - type: grok
+    api_base: https://api.grok.x.ai/v1
+    api_key: xxx
+    models:
+      - name: grok-beta
+        max_input_tokens: 128000
+  - type: gemini
+    api_base: https://generativelanguage.googleapis.com/v1beta
+    api_key: xxx
+    models:
+      - name: gemini-1.5-pro
+        max_input_tokens: 1000000
+    patch:
+      chat_completions:
+        '.*':
+          body:
+            safetySettings:
+              - category: HARM_CATEGORY_HARASSMENT
+                threshold: BLOCK_NONE
+              - category: HARM_CATEGORY_HATE_SPEECH
+                threshold: BLOCK_NONE
+              - category: HARM_CATEGORY_SEXUALLY_EXPLICIT
+                threshold: BLOCK_NONE
+              - category: HARM_CATEGORY_DANGEROUS_CONTENT
+                threshold: BLOCK_NONE
+  - type: openai-compatible
+    name: ollama
+    api_base: http://localhost:11434/v1
+    api_key: xxx
+    models:
+      - name: llama3.2
+        max_input_tokens: 128000

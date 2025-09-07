@@ -69,6 +69,7 @@ def main():
         if user_input.lower() == 'exit':
             print("Bye!")
             break
+        print("\r", end="")
         
         messages.append({"role": "user", "content": user_input})
         start = timeit.default_timer()
