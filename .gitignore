@@ -1,0 +1,31 @@
+# Python-specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+*.env
+pip-log.txt
+pip-selfcheck.json
+*.egg-info/
+dist/
+build/
+
+# Vim-specific
+*.swp
+*.swo
+*.swn
+.vim/
+Session.vim
+.undo/
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# OS and miscellaneous
+.DS_Store
+*.log
