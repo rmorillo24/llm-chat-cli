@@ -1,25 +1,15 @@
-# Ollama CLI Chat
+# LLM Chat CLI
 
-A simple Python-based command-line interface (CLI) for chatting with an Ollama server.
+A simple Python-based command-line interface (CLI) for chatting with configurable LLM APIs
 
 ## Motivation
 
-I created this project primarily to experiment with Ollama while building a quick terminal-based chat tool to streamline my workflow. Opening a web browser can feel sluggish, so this CLI provides a faster alternative for instant interactions. For instance, while working on vim it's specially useful.
-
-For in-depth research tasks, I recommend using online LLM chats, as they often offer better rendering and formatting. However, for quick questions and answers, the terminal is my go-to choice—it's lightweight and efficient.
-
-## Performance Notes
-
-For reference, I'm running Ollama on a server equipped with an RTX 4080 GPU. Response times are quite acceptable with Llama models, making them ideal for tasks like querying commands, generating script snippets, or other short-form assistance.
-
-In comparison, using GPT-OSS models is noticeably slower but tends to produce more comprehensive and detailed answers. Llama strikes a good balance for my everyday needs.
+I started this project as a simple bash script to do quick queries to an LLM so I could get quick help in the terminal and VIM.
+Then Moved to Python, and as it was getting complex, I look for existing alternatives. After finding the amazing [digoden/aichat](https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://github.com/sigoden/aichat&ved=2ahUKEwjjk_Dl78aPAxUwVqQEHWHzMr8QFnoECCgQAQ&usg=AOvVaw3mJgVPJqldMVDzVEP5JC3L) I decided to use some of it's ideas (it's Rust and I wanted python, and my own implementation).
 
 ## Usage Tips
 
-To make the tool more accessible, I created a symlink in `/usr/bin` pointing to the script. This allows me to execute it from anywhere in the terminal without specifying the full path. You can do the same after installing:
+To make the tool more accessible, I created a symlink in `/usr/bin` pointing to the 'main.py' script. This allows me to execute it from anywhere in the terminal without specifying the full path. Then, simply run `llm-chat-cli` to start chatting!
 
-```bash
-sudo ln -s /path/to/your/script.py /usr/bin/ollama-chat
-```
-
-Then, simply run `ollama-chat` to start chatting!
+Configure your preferred LLM providers and start chatting.
+If you are using ollama you can use the OpenAI compatible section.
