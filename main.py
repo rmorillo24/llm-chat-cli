@@ -8,11 +8,13 @@ from clients import BaseChatClient, XaiChat, GeminiChat, OpenAiCompatibleChat, O
 from typing import Dict, Any, List
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.text import Text
 import logging
 import questionary
 
 logging.basicConfig(level=logging.INFO)
 # logging.debug("Variable x = %s", x)
+TIMING = True
 
 class LLMClient:
     def __init__(self, config_path: str):
@@ -28,7 +30,6 @@ class LLMClient:
         self.default_model = self.config.get('default', None)
         self.current_client: Optional[BaseChatClient] = None
         self.current_model: Optional[str] = None
-
         self.load_model() #loads the default model
 
 
@@ -55,7 +56,6 @@ class LLMClient:
         if not model_config:
             raise ValueError(f"Model {model_name} for provider {provider}")
 
-        # Crear el cliente basado en el proveedor
         if provider == 'grok':
             self.current_client = XaiChat(client_config, model_config)
         elif provider == 'gemini':
@@ -69,10 +69,12 @@ class LLMClient:
 
         self.current_model = model
 
+
     def send_message(self, messages: List[Dict[str, str]], temperature: float = 1.0) -> str:
         if self.current_client is None:
             raise ValueError("No model loaded.")
         return self.current_client.send_message(messages, temperature)
+
 
     def list_models(self):
         models = []
@@ -89,15 +91,17 @@ class CommandHandler:
             '.exit': self._exit,
             '.help': self._help,
             '.clear': self._clear,
-            '.models': self._models
+            '.models': self._models,
+            '.set': self._set
         }
+        self.args = []
 
     def _exit(self):
         print("Bye!")
         return False  # Signal to break the loop
 
     def _help(self):
-        print("Available commands: .exit, .help, .clear")
+        print("Available commands: .exit, .help, .clear, .models")
         return True  # Continue the loop
 
     def _clear(self):
@@ -113,8 +117,15 @@ class CommandHandler:
         llm_client.load_model(selected_model)
         return True
 
+    def _set(self):
+        global TIMING
+        print("setting", self.args)
+        if self.args[0] == "timing":
+                TIMING = True
+        return True
+
     def handle_input(self, user_input):
-        command = user_input.lower().strip()  # Normalize input
+        command, *self.args = user_input.lower().strip().split() 
         action = self.commands.get(command, self._unknown_command)  # Get action or default to unknown
         return action()  # Execute the action and return its result
 
@@ -127,11 +138,9 @@ class CommandHandler:
             messages.append({"role": "assistant", "content": response})
             
             md = Markdown(response)
-            header = Markdown("| **" + user_input + "** |\n---\n\n\n")
-            
-            console.print(header)
-            console.print(md)
-            console.print(f"\n[{str(end - start)}] sec.]")
+            with console.pager(styles=True, links=True):
+                console.print(md)
+                if TIMING: print(f"\n{end - start:.2f} sec.")
 
         except Exception as e:
             print(f"Error con {model}: {e}")
@@ -142,11 +151,13 @@ class CommandHandler:
 
 if __name__ == "__main__":
     config_path = Path.home() / Path(".config/llm-chat-cli/configs.yaml")
-    console = Console()
-
+    os.environ.setdefault("PAGER", "less -RFX")
+    console = Console(force_terminal=True)
+    command_handler = CommandHandler()
+    
     try:
         llm_client = LLMClient(config_path)
-        console.print(Markdown(f"Chatting with *" + llm_client.default_model + "*. How can I help you today?"))
+        # command_handler.handle_input(".models")
         llm_client.load_model()  # Carga el modelo por defecto
     except Exception as e:
         print(f"Error al cargar la configuración: {e}")
@@ -156,10 +167,10 @@ if __name__ == "__main__":
         {'role': 'system', 'content': 'You are my assistant. I want short and concise answers without decoration or polite, unnecessary words.'}
     ]
 
-    command_handler = CommandHandler()
     st = True
     while st:
-        user_input = input("\n> ")
+        prompt = Text("\n\n> ", style="white on @1f2430 bold")
+        user_input = console.input(prompt)
         st = command_handler.handle_input(user_input)
         
 
