@@ -92,6 +92,7 @@ class CommandHandler:
         # Initialize the dispatch table with reserved words and their actions
         self.commands = {
             ':exit': self._exit,
+            ':q': self._exit,
             ':help': self._help,
             ':clear': self._clear,
             ':models': self._models,
@@ -106,7 +107,7 @@ class CommandHandler:
         return False  # Signal to break the loop
 
     def _help(self):
-        print("Available commands: .exit, .help, .clear, .models, .set, .updateollama")
+        print("Available commands: ", *self.commands)
         return True  # Continue the loop
 
     def _clear(self):
@@ -147,10 +148,12 @@ class CommandHandler:
             end = timeit.default_timer()
             messages.append({"role": "assistant", "content": response})
             
+            if TIMING:
+                 response += f"\n\n{end - start:.2f} sec."
+
             md = Markdown(response)
             with console.pager(styles=True, links=True):
                 console.print(md)
-                if TIMING: print(f"\n{end - start:.2f} sec.")
 
         except Exception as e:
             print(f"Error con {model}: {e}")
@@ -163,15 +166,13 @@ if __name__ == "__main__":
     os.environ.setdefault("PAGER", "less -RFX")
     
     try:
-
         config_manager= ConfigManager(Path.home() / ".config" / "llm-chat-cli" / "configs.yaml")
         console = Console(force_terminal = True)
         command_handler = CommandHandler(config_manager)
         llm_client = LLMClient(config_manager)
         llm_client.load_model()  # Load default model for faster start
-        # console.print(Markdown(f"Chatting with *" + llm_client.default_model + "*. How can I help you today?"))
     except Exception as e:
-        print(f"Error al cargar la configuración: {e}")
+        print(f"Error loading configuration: {e}")
         exit(1)
         
     messages = [
@@ -180,9 +181,10 @@ if __name__ == "__main__":
 
     st = True
     while st:
-        prompt = Text("\n\n> ", style="white on @1f2430 bold")
+        prompt = Text("\n> ", style="white on @1f2430 bold")
         user_input = console.input(prompt)
         console.print("\n")
         st = command_handler.handle_input(user_input)
+        console.print("\n")
         
 
