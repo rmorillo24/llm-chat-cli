@@ -86,6 +86,9 @@ class LLMClient:
     def get_config(self):
         return self.config
 
+    def get_current_model(self):
+        return self.current_model
+
 
            
 class CommandHandler:
@@ -119,7 +122,8 @@ class CommandHandler:
         models = llm_client.list_models()
         selected_model = questionary.select(
             "Select a model:",
-            choices = models
+            choices = models,
+            default = llm_client.get_current_model()
         ).ask()
         llm_client.load_model(selected_model)
         return True
