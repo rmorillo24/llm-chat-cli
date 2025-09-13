@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import argparse
 import yaml
 import timeit
 import subprocess
@@ -16,7 +17,7 @@ import questionary
 
 logging.basicConfig(level=logging.ERROR)
 # logging.debug("Variable x = %s", x)
-TIMING = True
+TIMING =False 
 
 class LLMClient:
     def __init__(self, config_manager: ConfigManager):
@@ -125,11 +126,18 @@ class CommandHandler:
 
     def _set(self):
         global TIMING
-        if self.args[0] == "timing":
+        TIMING = (TIMING and not (self.args[0] == "notiming")
+                 or self.args[0] == "timing")
+        return True
+    '''
+    if self.args[0] == "timing":
                 TIMING = True
+                print("Printing output timing")
         if self.args[0] == "notiming":
                 TIMING = False
+                print("Not printing output timing")
         return True
+    '''
 
     def _update_ollama_models(self):
         self.config_manager.update_ollama_models()
@@ -164,6 +172,11 @@ class CommandHandler:
 
 if __name__ == "__main__":
     os.environ.setdefault("PAGER", "less -RFX")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', nargs=argparse.REMAINDER,
+                        help='Ask the LLM only this one question')
+    args = parser.parse_args()
     
     try:
         config_manager= ConfigManager(Path.home() / ".config" / "llm-chat-cli" / "configs.yaml")
@@ -178,13 +191,16 @@ if __name__ == "__main__":
     messages = [
         {'role': 'system', 'content': 'You are my assistant. I want short and concise answers without decoration or polite, unnecessary words.'}
     ]
-
-    st = True
-    while st:
-        prompt = Text("\n> ", style="white on @1f2430 bold")
-        user_input = console.input(prompt)
-        console.print("\n")
-        st = command_handler.handle_input(user_input)
-        console.print("\n")
-        
+    
+    if args.c:
+        user_input=' '.join(args.c)
+        command_handler.handle_input(user_input)
+    else:
+        st = True
+        while st:
+            prompt = Text("\n> ", style="white on @1f2430 bold")
+            user_input = console.input(prompt)
+            st = command_handler.handle_input(user_input)
+            # console.print("\n")
+            
 
