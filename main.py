@@ -27,7 +27,20 @@ class LLMClient:
         self.default_model = self.config.get('default', None)
         self.current_client: Optional[BaseChatClient] = None
         self.current_model: Optional[str] = None
+        self.active_role: Optional[RoleConfig] = None
         self.load_model() #loads the default model
+
+    def set_role(self, role: RoleConfig):
+        role.kind = role.kind or detect_role_kind(role.template)
+        self.active_role = role
+
+        if role.model and role.model != self.current_model:
+            self.load_model(role.model)
+
+    def clear_role(self):
+        self.active_role = None
+        if self.current_model != self.default_model and self.default_model:
+            self.load_model(self.default_model)
 
 
     def load_model(self, model: str = None) -> None:
@@ -85,6 +98,69 @@ class LLMClient:
     def get_config(self):
         return self.config
 
+    
+    def fill_embedded(template: str, user_input: str) -> str:
+        return (template
+                .replace('{__INPUT__}', user_input)
+                .replace('__INPUT__', user_input))
+
+    
+    def build_messages_for_role(role: Optional[RoleConfig],
+                                user_input: str,
+                                history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        if role is None:
+            # No role → just pass through
+            return [*history, {'role': 'user', 'content': user_input}]
+
+        kind = role.kind or detect_role_kind(role.template)
+        hist = neutralize_history(history)
+
+        if kind == 'system':
+            return [
+                {'role': 'system', 'content': role.template},
+                *hist,
+                {'role': 'user', 'content': user_input},
+            ]
+
+        if kind == 'embedded':
+            return [
+                *hist,
+                {'role': 'user', 'content': fill_embedded(role.template, user_input)},
+            ]
+
+        # fewshot
+        # If your template uses {__INPUT__} inside the block, replace it;
+        # otherwise append INPUT/OUTPUT wrappers as-is.
+        filled = fill_embedded(role.template, user_input)
+        return [
+            *hist,  # optional: prepend a brief neutral context message instead
+            {'role': 'user', 'content': filled},
+        ]
+
+
+
+from dataclasses import dataclass
+import re
+from typing import Optional, List, Dict, Literal
+
+RoleKind = Literal['system', 'embedded', 'fewshot']
+
+@dataclass
+class RoleConfig:
+    name: str
+    template: str                   # raw role body
+    kind: Optional[RoleKind] = None # detect if None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    use_tools: Optional[bool] = None
+
+    def detect_role_kind(template: str) -> RoleKind:
+        if re.search(r'###\s*INPUT:.*###\s*OUTPUT:', template, re.S):
+            return 'fewshot'
+        if '__INPUT__' in template or '{__INPUT__}' in template:
+            return 'embedded'
+        return 'system'
 
            
 class CommandHandler:
@@ -97,7 +173,8 @@ class CommandHandler:
             ':clear': self._clear,
             ':models': self._models,
             ':updateollama': self._update_ollama_models,
-            ':set': self._set
+            ':set': self._set,
+            ':role': self._role
         }
         self.args = []
         self.config_manager = config_manager
@@ -137,28 +214,45 @@ class CommandHandler:
 
     def handle_input(self, user_input):
         command, *self.args = user_input.lower().strip().split() 
-        action = self.commands.get(command, self._unknown_command)  # Get action or default to unknown
-        return action()  # Execute the action and return its result
+        if command.startswith(":"):
+            action = self.commands.get(command, self._unknown_command)  
+            return action()  
+        else:
+            try:
+                # messages.append({"role": "user", "content": user_input})
+                message = llmclient.build_message_for_roles(user_input = user_input)
+                start = timeit.default_timer()
+                # response = llm_client.send_message(messages)
+                print("MESSAGE")
+                print(message) 
+                sys.exit(0)
+                end = timeit.default_timer()
+                #messages.append({"role": "assistant", "content": response})
+                
+                if TIMING:
+                    response += f"\n\n{end - start:.2f} sec."
+                
+                md = Markdown(response)
+                with console.pager(styles=True, links=True):
+                    console.print(md)
+                
+            except Exception as e:
+                logging.error(f"Error con: {e}")
+
+
+    def role(self):
+        if not self.args[0]:
+            print("Add a role name to the command")
+        else:
+            selected_role = self.args[0]
+            # look for selected role template and load
+            # message_content = <input>user_input<ouput>
+            # tell llm client to change the role. Pass 
+        return True
 
     def _unknown_command(self):
-        try:
-            messages.append({"role": "user", "content": user_input})
-            start = timeit.default_timer()
-            response = llm_client.send_message(messages)
-            end = timeit.default_timer()
-            messages.append({"role": "assistant", "content": response})
-            
-            if TIMING:
-                 response += f"\n\n{end - start:.2f} sec."
-
-            md = Markdown(response)
-            with console.pager(styles=True, links=True):
-                console.print(md)
-
-        except Exception as e:
-            print(f"Error con {model}: {e}")
-        return True  
-
+        print("Unkown command. Try one of these:")
+        print(*self_commands)
 
 
 
