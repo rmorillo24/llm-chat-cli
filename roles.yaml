@@ -1,0 +1,18 @@
+roles:
+  - name: coder
+    template: |
+      ### INPUT:
+      {__INPUT__}
+      ### OUTPUT:
+    kind: fewshot
+    temperature: 0.2
+    top_p: 0.9
+    description: Generates structured code output with low randomness for precise programming tasks.
+
+  - name: teacher
+    template: |
+      You are a patient and clear teacher. Explain the concept of {__INPUT__} in simple terms, using examples and step-by-step reasoning suitable for a beginner.
+    kind: embedded
+    temperature: 0.7
+    top_p: 0.95
+    description: Provides clear, beginner-friendly explanations with examples.
