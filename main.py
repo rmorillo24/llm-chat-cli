@@ -2,6 +2,7 @@
 
 import os
 import sys, select
+import argparse
 import yaml
 import timeit
 import subprocess
@@ -15,7 +16,7 @@ from rich.text import Text
 import logging
 import questionary
 
-TIMING = True
+TIMING =False 
 
 logger = logging.getLogger('my_app')
 console_handler = logging.StreamHandler()
@@ -213,6 +214,11 @@ class LLMClient:
 
         return self.current_client.send_message(messages, temperature=eff_temperature)
 
+
+def get_current_model(self):
+        return self.current_model
+
+
 class CommandHandler:
     def __init__(self, config_manager: ConfigManager, llm_client: 'LLMClient'):
         self.commands = {
@@ -246,17 +252,16 @@ class CommandHandler:
         models = self.llm_client.list_models()
         selected_model = questionary.select(
             "Select a model:",
-            choices=models
+            choices = models,
+            default = llm_client.get_current_model()
         ).ask()
         self.llm_client.load_model(selected_model)
         return True
 
     def _set(self):
         global TIMING
-        if self.args and self.args[0] == "timing":
-            TIMING = True
-        elif self.args and self.args[0] == "notiming":
-            TIMING = False
+        TIMING = (TIMING and not (self.args[0] == "notiming")
+                 or self.args[0] == "timing")
         return True
 
     def _update_ollama_models(self):
@@ -327,6 +332,11 @@ class CommandHandler:
 
 if __name__ == "__main__":
     os.environ.setdefault("PAGER", "less -RFX")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', nargs=argparse.REMAINDER,
+                        help='Ask the LLM only this one question')
+    args = parser.parse_args()
     
     try:
         config_manager = ConfigManager(Path.home() / ".config" / "llm-chat-cli" / "configs.yaml")
@@ -351,8 +361,13 @@ if __name__ == "__main__":
         {'role': 'system', 'content': 'You are my assistant. I want short and concise answers without decoration or polite, unnecessary words.'}
     ]
 
-    st = True
-    while st:
-        prompt = Text(">>> ", style="white on @1f2430 bold")
-        user_input = console.input(prompt)
-        st = command_handler.handle_input(user_input)
+    
+    if args.c:
+        user_input=' '.join(args.c)
+        command_handler.handle_input(user_input)
+    else:
+        st = True
+        while st:
+            prompt = Text("\n> ", style="white on @1f2430 bold")
+            user_input = console.input(prompt)
+            st = command_handler.handle_input(user_input)
