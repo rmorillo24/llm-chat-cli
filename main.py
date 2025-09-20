@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys, select
 import yaml
 import timeit
 import subprocess
@@ -279,8 +280,7 @@ class CommandHandler:
 
     def _role(self):
         if not self.args:
-            print("Add a role name to the command or use :listroles to see available roles")
-            return True
+            return self._list_roles()
         selected_role = self.args[0]
         if selected_role == 'none':
             self.llm_client.clear_role()
@@ -323,6 +323,8 @@ class CommandHandler:
                 logger.error(f"Error: {e}")
             return True
 
+
+
 if __name__ == "__main__":
     os.environ.setdefault("PAGER", "less -RFX")
     
@@ -351,8 +353,6 @@ if __name__ == "__main__":
 
     st = True
     while st:
-        prompt = Text("\n> ", style="white on @1f2430 bold")
+        prompt = Text(">>> ", style="white on @1f2430 bold")
         user_input = console.input(prompt)
-        console.print("\n")
         st = command_handler.handle_input(user_input)
-        console.print("\n")
