@@ -10,6 +10,7 @@ class ConfigManager:
     def __init__(self, config_path: str):
         self.config_path = Path(config_path)
         self.config = self._load_config()
+        self.logger = logging.getLogger("llmchat.config_manager")
 
     def _load_config(self) -> Dict[str, Any]:
         """Load the configuration from the YAML file."""
@@ -34,6 +35,7 @@ class ConfigManager:
         """Save the current configuration to the YAML file."""
         try:
             with self.config_path.open('w') as f:
+                print("SAVING CONFIGURATION TO FILE")
                 yaml.safe_dump(self.config, f, sort_keys=False)
         except Exception as e:
             raise IOError(f"Error saving config to {self.config_path}: {e}")
@@ -52,19 +54,19 @@ class ConfigManager:
                 line.split()[0] for line in result.stdout.strip().split('\n')[1:]
                 if line.strip()
             ]
-            logging.debug("existing ollama models: %s", ollama_models)
+            self.logger.debug("existing ollama models: %s", ollama_models)
 
             # Step 2: Get current ollama models from config
             ollama_client = next(
                 (client for client in self.config.get('clients', []) if client.get('name') == 'ollama'),
                 None
             )
-            logging.debug("Ollama_client: %s", ollama_client)
+            self.logger.debug("Ollama_client: %s", ollama_client)
             if not ollama_client:
                 raise ValueError("No ollama client found in configuration")
             
             config_models = {model['name'] for model in ollama_client.get('models', [])}
-            logging.debug("ollama models: %s", config_models)
+            self.logger.debug("ollama models: %s", config_models)
 
             # Step 3: Add new models from Ollama to config
             for model_name in ollama_models:
@@ -82,12 +84,12 @@ class ConfigManager:
 
             # Step 5: Update the config file
             self.update_config(self.config)
-            logging.info("Updated %s with current Ollama models %s", "file", ollama_client)
+            self.logger.info("Updated %s with current Ollama models %s", "file", ollama_client)
             
         except subprocess.CalledProcessError as e:
-            logging.error(f"Error executing docker command: {e}")
+            self.logger.error(f"Error executing docker command: {e}")
         except Exception as e:
-            logging.error(f"Error updating configuration: {e}")
+            self.logger.error(f"Error updating configuration: {e}")
 
             
 
