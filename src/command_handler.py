@@ -2,6 +2,15 @@ import os
 from src.llmclient import LLMClient
 from src.config_manager import ConfigManager
 import logging
+import timeit
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.text import Text
+import questionary
+import pyperclip
+
+
+
 
 class CommandHandler:
     def __init__(self, config_manager: ConfigManager, llm_client: 'LLMClient'):
@@ -14,12 +23,18 @@ class CommandHandler:
             ':updateollama': (self._update_ollama_models, "Update config file with pulled ollama models"),
             ':set': (self._set, "Set some features on or off"),
             ':role': (self._role, "Change the role of the assistant"),
-            ':listroles': (self._list_roles, "List the existing roles")
+            ':listroles': (self._list_roles, "List the existing roles"),
+            ':copy': (self._copy, "Copy the latest response to the clipboard")
         }
         self.args = []
         self.config_manager = config_manager
         self.llm_client = llm_client
-        self.logger = logging.getlogger('llmchat.configmanager')
+        self.logger = logging.getLogger('llmchat.configmanager')
+        self.set_config = {
+            'timing': True,
+            'markdown': True
+        }
+        self.console = Console()
 
     def _exit(self):
         print("Bye!")
@@ -40,21 +55,19 @@ class CommandHandler:
         selected_model = questionary.select(
             "Select a model:",
             choices = models,
-            default = llm_client.get_current_model()
+            default = self.llm_client.get_current_model()
         ).ask()
         self.llm_client.load_model(selected_model)
         return True
 
     def _set(self):
-        global TIMING
-        global MARKDOWN
         if not self.args:
             print("set options: timing, notiming, markdown, nomarkdown")
             return True
-        TIMING = (TIMING and not (self.args[0] == "notiming")
+        self.set_config['timing'] = (self.set_config['timing'] and not (self.args[0] == "notiming")
                  or self.args[0] == "timing")
 
-        MARKDOWN = (MARKDOWN and not (self.args[0] == "nomarkdown")
+        self.set_config['markdown'] = (self.set_config['markdown'] and not (self.args[0] == "nomarkdown")
                  or self.args[0] == "markdown")
         return True
 
@@ -103,28 +116,44 @@ class CommandHandler:
         command, *self.args = user_input.strip().split(maxsplit=1)
         self.args = self.args[0].split() if self.args else []
         if command.startswith(":"):
-            action, _ = self.commands.get(command, self._unknown_command)
-            return action()
+            try:
+                action, _ = self.commands.get(command, self._unknown_command)
+                return action()
+            except:
+                self._unknown_command()
+                return True
         else:
             try:
-                message = self.llm_client.build_messages_for_role(user_input, history=messages)
+                message = self.llm_client.build_messages_for_role(user_input)
                 start = timeit.default_timer()
-                response = self.llm_client.send_with_role(user_input, history=messages)
+                response = self.llm_client.send_with_role(user_input)
                 end = timeit.default_timer()
-                messages.append({"role": "assistant", "content": response})
                 
-                if TIMING:
+                if self.set_config['timing']:
                     response += f"\n\n{end - start:.2f} sec."
                 
-                if MARKDOWN:
+                if self.set_config['markdown']:
                     md = Markdown(response)
                 else:
                     md = response
-                with console.pager(styles=True, links=True):
-                    console.print(md)
-                
+                with self.console.pager(styles=True, links=True):
+                    self.console.print(md)
+            except ValueError as ve:
+                self.console.print(f"[red]Configuration error: {ve}[/red]")
+                self.logger.debug(f"ValueError: {ve}")
+            except RuntimeError as re:
+                self.console.print(f"[red]LLM server error: {re}[/red]")
+                self.logger.debug(f"RuntimeError: {re}")
             except Exception as e:
-                logger.error(f"Error: {e}")
+                self.console.print(f"[red]Unexpected error: {e}[/red]")
+                self.logger.error(f"Unexpected error: {e}")      
             return True
 
 
+    def _copy(self):
+        history = self.llm_client.get_history()
+        if history and history[-1].get('role') == 'assistant':
+            pyperclip.copy(history[-1]['content'])
+        else:
+            pyperclip.copy('')
+        return True

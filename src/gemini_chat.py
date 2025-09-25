@@ -1,10 +1,9 @@
-import requests
-from .base_chat import BaseChatClient
+# gemini_chat.py
 from typing import Dict, List
+from .base_chat import BaseChatClient
 
 class GeminiChat(BaseChatClient):
     def send_message(self, messages: List[Dict[str, str]], temperature: float) -> str:
-        """Envía un mensaje a la API de Gemini y devuelve la respuesta."""
         headers = {
             'Content-Type': 'application/json',
             'x-goog-api-key': self.api_key
@@ -14,9 +13,7 @@ class GeminiChat(BaseChatClient):
                 {'parts': [{'text': msg['content']}]}
                 for msg in messages if msg['role'] in ['user', 'system']
             ],
-            'generationConfig': {
-                'temperature': temperature
-            },
+            'generationConfig': {'temperature': temperature},
             'safetySettings': [
                 {'category': 'HARM_CATEGORY_HARASSMENT', 'threshold': 'BLOCK_NONE'},
                 {'category': 'HARM_CATEGORY_HATE_SPEECH', 'threshold': 'BLOCK_NONE'},
@@ -24,7 +21,10 @@ class GeminiChat(BaseChatClient):
                 {'category': 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold': 'BLOCK_NONE'}
             ]
         }
-        response = requests.post(f"{self.api_base}/models/{self.model_name}:generateContent",
-                               headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
+        data = self._send_request(f"{self.api_base}/models/{self.model_name}:generateContent", headers, payload)
+        try:
+            return data['candidates'][0]['content']['parts'][0]['text']
+        except (KeyError, IndexError) as parse_err:
+            raise RuntimeError(
+                f"Invalid response format from GeminiChat (model: {self.model_name}): {parse_err}"
+            ) from parse_err

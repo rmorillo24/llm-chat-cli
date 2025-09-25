@@ -47,6 +47,7 @@ class LLMClient:
         self.active_role: Optional[RoleConfig] = None
         self.roles = self._load_roles(roles_path) if roles_path else {}
         self.load_model() # loads the default model
+        self.history = []
 
     def _load_roles(self, roles_path: str) -> Dict[str, RoleConfig]:
         """Load roles from a YAML file."""
@@ -141,67 +142,64 @@ class LLMClient:
                 .replace('{__INPUT__}', user_input)
                 .replace('__INPUT__', user_input))
 
-    def neutralize_history(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+
+    def neutralize_history(self) -> List[Dict[str, str]]:
         SCAFFOLD_MARK = re.compile(r'###\s*INPUT:|###\s*OUTPUT:', re.I)
         clean = []
-        for m in history:
+        for m in self.history:
             if m.get('role') == 'system':
                 continue
             if m.get('role') == 'user' and SCAFFOLD_MARK.search(m.get('content', '')):
+                content = m.get('content', '')
+                match = re.search(r'###\s*INPUT:\n(.*)\n###\s*OUTPUT:', content, re.S)
+                if match:
+                    clean.append({'role': 'user', 'content': match.group(1).strip()})
                 continue
             clean.append(m)
         return clean
 
+
     def build_messages_for_role(self, 
                                user_input: str,
-                               history: List[Dict[str, str]],
                                role: Optional[RoleConfig] = None) -> List[Dict[str, str]]:
+        hist = self.neutralize_history()  # Always neutralize for consistency
         if role is None:
-            return [*history, {'role': 'user', 'content': user_input}]
+            return hist + [{'role': 'user', 'content': user_input}]  
+        
         kind = role.kind or role.detect_role_kind(role.template)
-        hist = self.neutralize_history(history)
-
         if kind == 'system':
-            return [
-                {'role': 'system', 'content': role.template},
-                *hist,
-                {'role': 'user', 'content': user_input},
-            ]
+            return [{'role': 'system', 'content': role.template}] + hist + [{'role': 'user', 'content': user_input}]
+        else:  # embedded or fewshot
+            return hist + [{'role': 'user', 'content': self.fill_embedded(role.template, user_input)}]
 
-        if kind == 'embedded':
-            return [
-                *hist,
-                {'role': 'user', 'content': self.fill_embedded(role.template, user_input)},
-            ]
-
-        if kind == 'fewshot':
-            return [
-                *hist,
-                {'role': 'user', 'content': self.fill_embedded(role.template, user_input)},
-            ]
 
     def send_with_role(self,
                        user_input: str,
-                       history: List[Dict[str, str]] = None,
                        temperature: Optional[float] = None,
                        top_p: Optional[float] = None) -> str:
         if self.current_client is None:
             raise ValueError("No model loaded.")
-        history = history or []
-
+        
         role = self.active_role
-        messages = self.build_messages_for_role(user_input, role=role, history=history)
-
+        messages = self.build_messages_for_role(user_input, role=role)  # Temp messages, don't set self.history
+        
         eff_temperature = (role.temperature if role and role.temperature is not None
                            else temperature if temperature is not None
                            else 1.0)
         eff_top_p = (role.top_p if role and role.top_p is not None
                      else top_p)
-
-        return self.current_client.send_message(messages, temperature=eff_temperature)
+ 
+        response = self.current_client.send_message(messages, temperature=eff_temperature)
+        
+        self.history.append({'role': 'user', 'content': user_input}) 
+        self.history.append({'role': 'assistant', 'content': response})
+        
+        return response
 
 
     def get_current_model(self):
         return self.current_model
 
 
+    def get_history(self) -> []:
+        return self.history
