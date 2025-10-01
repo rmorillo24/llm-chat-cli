@@ -13,5 +13,5 @@ class OpenAiCompatibleChat(BaseChatClient):
             "messages": messages,
             "temperature": temperature,
         }
-        data = self._send_request(f"{self.api_base}/chat/completions", headers, payload)
+        data = self._send_request(f"{self.api_base}/v1/chat/completions", headers, payload)
         return self._parse_response(data)

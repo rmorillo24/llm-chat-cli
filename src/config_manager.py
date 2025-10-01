@@ -1,4 +1,5 @@
 import yaml
+import requests
 from pathlib import Path
 from typing import Dict, Any
 import subprocess
@@ -42,54 +43,71 @@ class ConfigManager:
 
     def update_ollama_models(self):
         try:
-            # Step 1: Get model names from Ollama server
-            result = subprocess.run(
-                ['docker', 'exec', '-it', 'ollama', 'ollama', 'list'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            # Extract model names from the first column, skipping header
-            ollama_models = [
-                line.split()[0] for line in result.stdout.strip().split('\n')[1:]
-                if line.strip()
+            # Step 1: Find all Ollama clients (type: openai-compatible)
+            ollama_clients = [
+                client for client in self.config.get('clients', [])
+                if client.get('type') == 'ollama'
             ]
-            self.logger.debug("existing ollama models: %s", ollama_models)
+            if not ollama_clients:
+                raise ValueError("No Ollama clients (type: ollamollamaa) found in configuration")
 
-            # Step 2: Get current ollama models from config
-            ollama_client = next(
-                (client for client in self.config.get('clients', []) if client.get('name') == 'ollama'),
-                None
-            )
-            self.logger.debug("Ollama_client: %s", ollama_client)
+            # Step 2: If multiple Ollama clients, prompt user to select one
+            if len(ollama_clients) > 1:
+                choices = [client['name'] for client in ollama_clients]
+                print(choices)
+                selected_client_name = questionary.select(
+                    "Select an Ollama client to update:",
+                    choices=choices
+                ).ask()
+                if not selected_client_name:
+                    self.logger.info("No client selected, aborting update")
+                    return
+                ollama_client = next(
+                    (client for client in ollama_clients if client['name'] == selected_client_name),
+                    None
+                )
+            else:
+                ollama_client = ollama_clients[0]
+                selected_client_name = ollama_client['name']
+
             if not ollama_client:
-                raise ValueError("No ollama client found in configuration")
-            
-            config_models = {model['name'] for model in ollama_client.get('models', [])}
-            self.logger.debug("ollama models: %s", config_models)
+                raise ValueError(f"Selected Ollama client {selected_client_name} not found")
 
-            # Step 3: Add new models from Ollama to config
+            # Step 3: Get model names from Ollama server via HTTP API
+            api_base = ollama_client.get('api_base')
+            if not api_base:
+                raise ValueError(f"No api_base defined for Ollama client {selected_client_name}")
+            response = requests.get(f"{api_base}/api/tags")
+            response.raise_for_status()
+            data = response.json()
+            ollama_models = [model['name'] for model in data.get('models', []) if model.get('name')]
+            self.logger.debug("Existing Ollama models for %s: %s", selected_client_name, ollama_models)
+
+            # Step 4: Get current models from config for the selected client
+            config_models = {model['name'] for model in ollama_client.get('models', [])}
+            self.logger.debug("Ollama models in config for %s: %s", selected_client_name, config_models)
+
+            # Step 5: Add new models from Ollama to config
             for model_name in ollama_models:
                 if model_name not in config_models:
                     ollama_client['models'].append({
                         'name': model_name,
                         'max_input_tokens': 128000  # Default value from existing config
                     })
+                    self.logger.debug("Added model %s to config for %s", model_name, selected_client_name)
 
-            # Step 4: Remove models from config that are not in Ollama
+            # Step 6: Remove models from config that are not in Ollama
             ollama_client['models'] = [
                 model for model in ollama_client['models']
                 if model['name'] in ollama_models
             ]
+            self.logger.debug("Updated Ollama models in config for %s: %s", selected_client_name, [model['name'] for model in ollama_client['models']])
 
-            # Step 5: Update the config file
+            # Step 7: Update the config file
             self.update_config(self.config)
-            self.logger.info("Updated %s with current Ollama models %s", "file", ollama_client)
-            
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Error executing docker command: {e}")
+            self.logger.info("Updated %s with current Ollama models for %s: %s", self.config_path, selected_client_name, [model['name'] for model in ollama_client['models']])
+
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error fetching models from Ollama API for {selected_client_name}: {e}")
         except Exception as e:
-            self.logger.error(f"Error updating configuration: {e}")
-
-            
-
+            self.logger.error(f"Error updating configuration for {selected_client_name}: {e}")

@@ -52,13 +52,40 @@ class CommandHandler:
 
     def _models(self):
         models = self.llm_client.list_models()
-        selected_model = questionary.select(
-            "Select a model:",
-            choices = models,
-            default = self.llm_client.get_current_model()
-        ).ask()
-        self.llm_client.load_model(selected_model)
+        # Create display choices with type information
+        choices = []
+        for model in models:
+            parts = model.split(':')
+            if len(parts) < 2:
+                self.logger.error(f"Invalid model format: {model}")
+                continue
+            client_name = parts[0]
+            model_name = ':'.join(parts[1:])  # Join all parts after client_name
+            client_config = next(
+                (client for client in self.config_manager.get_config().get('clients', []) if client.get('name') == client_name),
+                None
+            )
+            client_type = client_config.get('type', 'unknown') if client_config else 'unknown'
+            choices.append(f"{model}")
+        default = self.llm_client.get_current_model()
+        if default not in choices:
+            default = None
+        print(default)
+        print(choices)
+        try:
+            selected_model = questionary.select(
+                "Select a model:",
+                choices=choices,
+                default=default
+            ).ask()
+            # Strip the type info from the selected choice
+            if selected_model:
+                selected_model = selected_model.split(' (')[0]
+                self.llm_client.load_model(selected_model)
+        except:
+            raise ValueError("Error showing models to user")
         return True
+
 
     def _set(self):
         if not self.args:
@@ -118,10 +145,14 @@ class CommandHandler:
         if command.startswith(":"):
             try:
                 action, _ = self.commands.get(command, self._unknown_command)
-                return action()
             except:
                 self._unknown_command()
                 return True
+            try:
+                return action()
+            except Exception as e:
+                self.logger.error(e)
+                print("Error executing action:", command)
         else:
             try:
                 message = self.llm_client.build_messages_for_role(user_input)

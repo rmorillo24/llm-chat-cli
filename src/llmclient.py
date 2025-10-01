@@ -90,35 +90,44 @@ class LLMClient:
         if not model:
             raise ValueError("No model specified and default model not present")
 
-        provider, model_name, *version = model.split(':') if ':' in model else (None, model)
-        if version: model_name += ":" + version[0]
-        self.logger.debug("load_model -> provider: %s, model_name: %s", provider, model_name)
+        client_name, model_name, *version = model.split(':') if ':' in model else (None, model)
+        if version:
+            model_name += ":" + version[0]
+        self.logger.debug("load_model -> client_name: %s, model_name: %s", client_name, model_name)
 
-        if not provider or not model_name:
-            raise ValueError(f"Invalid format: {model}. Expecting 'provider:model'")
-        if provider not in self.clients:
-            raise ValueError(f"Provider {provider} not found in config file")
+        if not client_name or not model_name:
+            raise ValueError(f"Invalid format: {model}. Expecting 'client_name:model'")
+        
+        client_config = next(
+            (client for client in self.clients.values() if client.get('name') == client_name),
+            None
+        )
+        if not client_config:
+            raise ValueError(f"Client {client_name} not found in config file")
 
-        client_config = self.clients[provider]
         if client_config["api_key"].startswith('$'):
             envvar = client_config["api_key"][1:]
             client_config["api_key"] = os.getenv(envvar, client_config["api_key"])
-        model_config = next((m for m in client_config.get('models', []) if m['name'] == model_name), None)
+        model_config = next(
+            (m for m in client_config.get('models', []) if m['name'] == model_name),
+            None
+        )
         self.logger.debug("client config loaded: %s", client_config)
         self.logger.debug("model config loaded: %s", model_config)
         if not model_config:
-            raise ValueError(f"Model {model_name} for provider {provider}")
+            raise ValueError(f"Model {model_name} for client {client_name} not found")
 
-        if provider == 'grok':
+        provider_type = client_config.get('type')
+        if provider_type == 'grok':
             self.current_client = XaiChat(client_config, model_config)
-        elif provider == 'gemini':
+        elif provider_type == 'gemini':
             self.current_client = GeminiChat(client_config, model_config)
-        elif provider == 'openai':
+        elif provider_type == 'openai':
             self.current_client = OpenAiChat(client_config, model_config)
-        elif provider == 'openai-compatible':
+        elif provider_type == 'ollama':
             self.current_client = OpenAiCompatibleChat(client_config, model_config)
         else:
-            raise ValueError(f"Provider type {provider} not supported")
+            raise ValueError(f"Provider type {provider_type} not supported")
 
         self.current_model = model
 
@@ -130,8 +139,9 @@ class LLMClient:
     def list_models(self):
         models = []
         for provider in self.config["clients"]:
+            provider_name = provider.get("name")
             for model in provider["models"]:
-                models.append(provider["type"] + ":" + model['name'] )
+                models.append(provider["name"] + ":" + model['name'] )
         return models
 
     def get_config(self):

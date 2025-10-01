@@ -1,19 +1,22 @@
-default: openai-compatible:llama3.2
+default: Ollama:llama3.2
 
 clients:
-  - type: openai
+  - name: OpenAI
+    type: openai
     api_base: https://api.openai.com/v1
     api_key: $OPENAI_API_KEY #start with $ if api_key is stored in that envvar
     models:
       - name: gpt-4o
         max_input_tokens: 128000
-  - type: grok
+  - name: XAi
+    type: grok
     api_base: https://api.grok.x.ai/v1
     api_key: my_super_secret_key #insert key directly here
     models:
       - name: grok-beta
         max_input_tokens: 128000
-  - type: gemini
+  - name: Google Gemini
+    type: gemini
     api_base: https://generativelanguage.googleapis.com/v1beta
     api_key: $my_key #if your key starts with $ and don't want to set an envvar, make sure the envvar does not exist
     models:
@@ -32,8 +35,8 @@ clients:
                 threshold: BLOCK_NONE
               - category: HARM_CATEGORY_DANGEROUS_CONTENT
                 threshold: BLOCK_NONE
-  - type: openai-compatible
-    name: ollama
+  - name: Ollama
+    type: ollama
     api_base: http://localhost:11434/v1
     api_key: xxx
     models:
